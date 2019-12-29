@@ -1,0 +1,2 @@
+subjectAltName = DNS:mac-linux,IP:192.168.234.128,IP:127.0.0.1
+extendedKeyUsage = serverAuth

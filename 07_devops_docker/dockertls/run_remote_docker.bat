@@ -1,0 +1,1 @@
+docker --tlsverify --tlscacert=ca.pem --tlscert=cert.pem --tlskey=key.pem -H=192.168.234.128:2376 images
