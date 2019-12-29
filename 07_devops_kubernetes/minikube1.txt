@@ -1,0 +1,187 @@
+
+## Linyux 玩转 Minikube
+
+### K8S的版本
+
+	$ minikube version
+	$ kubectl version
+
+### 查看主机名
+
+	$ hostname
+
+### 查看K8S的状态
+
+	$ minikube status
+	host: Running
+	kubelet: Running
+	apiserver: Running
+	kubectl: Correctly Configured: pointing to minikube-vm at 192.168.80.100
+	
+### 获取组件健康状态
+
+	$ kubectl get cs
+	NAME                 STATUS    MESSAGE              ERROR
+	controller-manager   Healthy   ok                   
+	scheduler            Healthy   ok                   
+	etcd-0               Healthy   {"health": "true"}   
+
+### 查看K8S的集群信息
+
+	$ kubectl cluster-info
+	Kubernetes master is running at https://192.168.80.100:8443
+	KubeDNS is running at https://192.168.80.100:8443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+	To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+
+### 查看K8S的集群dump信息
+
+	kubectl cluster-info dump
+
+### 查看K8S的集群节点
+	
+	$ kubectl get nodes
+	NAME       STATUS   ROLES    AGE   VERSION
+	minikube   Ready    master   20m   v1.13.2
+
+### 查看节点详细信息
+
+	$ kubectl describe node minikube
+
+### 查看K8S的pods容器组
+
+	$ kubectl get pods
+	$ kubectl get pods -o wide
+
+### 查看所有的Pods，验证是否成功
+
+	$ kubectl get pods --all-namespaces
+
+	NAMESPACE     NAME                               READY   STATUS             RESTARTS   AGE
+	kube-system   coredns-86c58d9df4-k9hss           1/1     Running            0          5m43s
+	kube-system   coredns-86c58d9df4-wsfph           1/1     Running            0          5m43s
+	kube-system   etcd-minikube                      1/1     Running            0          4m50s
+	kube-system   kube-addon-manager-minikube        0/1     ImagePullBackOff   0          5m56s
+	kube-system   kube-apiserver-minikube            1/1     Running            0          4m53s
+	kube-system   kube-controller-manager-minikube   1/1     Running            0          4m43s
+	kube-system   kube-proxy-cnjrg                   1/1     Running            0          5m43s
+	kube-system   kube-scheduler-minikube            1/1     Running            0          5m6s
+
+### 查看K8S的services
+
+	$ kubectl get services
+
+### minikube仪表板
+
+	$ minikube dashboard
+
+### minikube仪表板,查看具体url：
+
+	$ minikube dashboard --url       
+	http://10.0.3.15:30000 (内部IP的路由转发，参考后面双网卡的问题)
+
+
+### 如果你想访问 Web 程序的前端
+
+	$ kubectl proxy
+	Starting to serve on 127.0.0.1:8001
+
+### 测试minikube
+
+	$ kubectl run web-app --image=nginx --port=80 --image-pull-policy=IfNotPresent
+	$ kubectl expose deployment web-app --type=NodePort
+	$ minikube service web-app
+
+### 动态扩容副本数
+
+	$ kubectl scale deployments/web-app --replicas=3
+
+### 依次删除资源
+
+	$ kubectl delete service web-app
+	kubectl delete deployment web-app
+
+### Tutorials 
+
+我们打开的页面是模拟器，你第一步需要做的事情就是打开迷你版的K8S。
+怎么打开，左侧提示信息很清晰的告诉你运行命令启动迷你版K8S，其实运行start之后你是获取到一台云主机，接下来的操作都是在你获得的云主机上执行的。
+
+	kubectl run kubernetes-bootcamp --image=docker.io/jocatalin/kubernetes-bootcamp:v1 --port=8080
+	kubectl expose deployment/kubernetes-bootcamp --type="NodePort" --port 8080
+
+现在我们查看一下pods
+	kubectl get pods
+
+现在我们查看一下services
+	kubectl get services
+
+测试一下：
+
+	curl minikube:30592
+
+查看deployments 还是使用kubectl get命令：
+
+	kubectl get deployments
+
+动态扩容kubernetes-bootcamp应用的副本数:
+
+	kubectl scale deployments/kubernetes-bootcamp --replicas=3
+
+查看此时部署的进度
+
+	kubectl get deployments
+
+查看pods
+
+	kubectl get pods
+
+K8S是编排工具，pod又是一组应用的容器集合，那么实际上每次访问这个应用时请求会发送到不同的 Pod，三个副本轮询处理，这样就实现了负载均衡。
+
+	curl minikube:30592
+
+接下来我们升级镜像
+
+	kubectl set image deployments/kubernetes-bootcamp kubernetes-bootcamp=jocatalin/kubernetes-bootcamp:v2
+
+可以看到升级的过程
+
+	kubectl get pods
+	curl minikube:30592
+
+回退到v1的镜像也很简单使用kubectl rollout undo 命令即可:
+
+	kubectl rollout undo deployments/kubernetes-bootcamp
+
+可以看到回退的过程
+
+	kubectl get pods
+
+查看 dashboard，可以根据具体问题作出具体的解决方法:
+
+	kubectl get pods--all-namespaces
+	...
+	NAMESPACE    NAME                                    READY     STATUS   RESTARTS   AGE
+	kube-system  kubernetes-dashboard-5498ccf677-scd97   1/1       Running   4         18h
+	...
+	kubectl describe --namespace=kube-system pod kubernetes-dashboard-5498ccf677-scd97
+
+### 双网卡的问题
+
+由于virtual是双网卡的问题，所以minikube返回的url是不能访问的，10.0.3.15这个IP是内部IP，pc端是无法访问的，所以需要在iptalbes上做一下路由转发！
+
+#### 临时
+
+	echo "1">/proc/sys/net/ipv4/ip_forward
+
+
+#### 固定
+
+	修改/etc/sysctl.conf，取消这一行的注释：
+	net.ipv4.ip_forward = 1
+
+	root@ubuntu:~#sysctl -p
+	
+	设置iptables规则：
+	iptables -t nat -A POSTROUTING -j MASQUERADE
+
+再访问：http://192.168.56.102:30000就可以访问了
+

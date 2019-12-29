@@ -1,0 +1,624 @@
+##  CentOS7 安装 Minikube
+
+### 00. 关闭若干项目
+
+#### 关闭防火墙
+
+关闭防火墙：
+
+	# systemctl stop firewalld
+	# systemctl disable firewalld
+
+#### 关闭SELinux
+
+查看SELinux的状态
+
+	$ sestatus
+	SELinux status:                 enabled
+	SELinuxfs mount:                /sys/fs/selinux
+	SELinux root directory:         /etc/selinux
+	Loaded policy name:             targeted
+	Current mode:                   enforcing
+	Mode from config file:          enforcing
+	Policy MLS status:              enabled
+	Policy deny_unknown status:     allowed
+	Max kernel policy version:      31
+
+永久关闭SELinux
+
+修改配置文件/etc/selinux/config，将其中的SELINUX=enforcing改为SELINUX=disabled
+
+	# vi /etc/selinux/config
+	
+	# This file controls the state of SELinux on the system.
+	# SELINUX= can take one of these three values:
+	#     enforcing - SELinux security policy is enforced.
+	#     permissive - SELinux prints warnings instead of enforcing.
+	#     disabled - No SELinux policy is loaded.
+	#SELINUX=enforcing
+	SELINUX=disabled
+	# SELINUXTYPE= can take one of three values:
+	#     targeted - Targeted processes are protected,
+	#     minimum - Modification of targeted policy. Only selected processes are protected.
+	#     mls - Multi Level Security protection.
+	SELINUXTYPE=targeted
+
+解决如下的错误：
+
+[ERROR FileContent--proc-sys-net-bridge-bridge-nf-call-iptables]: /proc/sys/net/bridge/bridge-nf-call-iptables contents are not set to 1
+
+I solve this problem by execting two commands:
+
+	sysctl net.bridge.bridge-nf-call-iptables=1
+	sysctl net.bridge.bridge-nf-call-ip6tables=1
+
+在/etc/sysctl.conf中添加：
+
+	net.bridge.bridge-nf-call-ip6tables = 1
+	net.bridge.bridge-nf-call-iptables = 1
+
+[https://www.cnblogs.com/zejin2008/p/7102485.html](https://www.cnblogs.com/zejin2008/p/7102485.html "Centos7添加bridge-nf-call-ip6tables出现No such file or directory")
+
+
+重启系统，再执行sestatus查看状态
+
+	$ sudo reboot
+	$ sestatus
+
+
+### 01. 安装VirtualBox
+
+#### 1.1 查看自己的内核版本并且记录
+
+	$ rpm -qa |grep kernel
+	$ uname -r
+	$ cat /etc/redhat-release
+
+
+![LINUX内核信息](img/linux_centos_kernel_info.png)
+
+#### 1.2 查看当前Linux是否可以玩虚拟机
+
+	$ grep -E '(vmx|svm)' /proc/cpuinfo
+		flags : ..............
+
+#### 1.3 安装wget
+
+	$ sudo yum install -y wget
+		Installed: wget.x86_64 0:1.14-18.el7      
+
+
+#### 1.4 查看当前的源
+
+	$ cd /etc/yum.repos.d/
+	$ ll -la
+
+		drwxr-xr-x.  2 root root  209 Jan 13 20:44 .
+		drwxr-xr-x. 77 root root 8192 Jan 19 09:30 ..
+		-rw-r--r--.  1 root root 1664 Nov 23 08:16 CentOS-Base.repo
+		-rw-r--r--.  1 root root 1309 Nov 23 08:16 CentOS-CR.repo
+		-rw-r--r--.  1 root root  649 Nov 23 08:16 CentOS-Debuginfo.repo
+		-rw-r--r--.  1 root root  314 Nov 23 08:16 CentOS-fasttrack.repo
+		-rw-r--r--.  1 root root  630 Nov 23 08:16 CentOS-Media.repo
+		-rw-r--r--.  1 root root 1331 Nov 23 08:16 CentOS-Sources.repo
+		-rw-r--r--.  1 root root 5701 Nov 23 08:16 CentOS-Vault.repo
+		-rw-r--r--.  1 root root 2424 Oct 24 13:22 docker-ce.repo
+
+#### 1.5 修改yum源为阿里源
+
+**EPEL** (Extra Packages for Enterprise Linux)是基于Fedora的一个项目，为“红帽系”的操作系统提供额外的软件包，适用于RHEL、CentOS 和 Scientific Linux.
+
+	$ cd /etc/yum.repos.d
+	$ sudo mv CentOS-Base.repo CentOS-Base.repo.bak
+	$ sudo wget -O CentOS-Base.repo http://mirrors.aliyun.com/repo/Centos-7.repo
+	$ sudo wget -P /etc/yum.repos.d/ http://mirrors.aliyun.com/repo/epel-7.repo 
+	$ yum clean all
+	$ yum makecache
+
+
+#### 1.6 导入epel安装源
+
+	$ sudo yum install epel-release
+		Installed: epel-release.noarch 0:7-11      
+
+#### 1.7 添加VirtualBox安装源
+
+	$ sudo wget http://download.virtualbox.org/virtualbox/rpm/rhel/virtualbox.repo 
+		--2019-01-19 09:34:04--  http://download.virtualbox.org/virtualbox/rpm/rhel/virtualbox.repo
+		Resolving download.virtualbox.org (download.virtualbox.org)... 23.41.20.119
+		Connecting to download.virtualbox.org (download.virtualbox.org)|23.41.20.119|:80... connected.
+		HTTP request sent, awaiting response... 200 OK
+
+#### 1.8 重新更新yum
+
+	# yum clean all 
+	# yum makecache 
+	# yum update 
+                                                                                                                                                                                                                                    
+	
+#### 1.9 查看可用的VirtualBox
+
+	$ yum list | grep VirtualBox
+		VirtualBox-4.3.x86_64	4.3.40_110317_el7-1		virtualbox
+		VirtualBox-5.0.x86_64	5.0.40_115130_el7-1		virtualbox
+		VirtualBox-5.1.x86_64	5.1.38_122592_el7-1		virtualbox
+		VirtualBox-5.2.x86_64	5.2.24_128163_el7-1		virtualbox
+		VirtualBox-6.0.x86_64	6.0.2_128162_el7-1		virtualbox
+
+#### 1.10 重新安装VirtualBox
+
+	$ sudo yum install VirtualBox-6.0
+
+#### 1.11 将用户加入vboxusers组
+
+	$ sudo usermod -G vboxusers -a $(whoami)
+
+#### 1.12 安装网卡模块
+
+	$ sudo yum install dkms kernel-devel kernel-headers
+	$ sudo rcvboxdrv setup
+
+##### 如果出现其他错误，继续安装：
+
+	$ sudo rcvboxdrv setup
+		vboxdrv.sh: Stopping VirtualBox services.
+		vboxdrv.sh: Starting VirtualBox services.
+		vboxdrv.sh: Building VirtualBox kernel modules.
+		This system is currently not set up to build kernel modules.
+		Please install the gcc make perl packages from your distribution.
+		Please install the Linux kernel "header" files matching the current kernel
+		for adding new hardware support to the system.
+		The distribution packages containing the headers are probably:
+		    kernel-devel kernel-devel-3.10.0-957.el7.x86_64
+
+##### 错误1： 需要安装kernel-devel
+
+	$ sudo yum install kernel-devel-3.10.0-957.el7.x86_64
+	$ sudo rcvboxdrv setup
+		vboxdrv.sh: Stopping VirtualBox services.
+		vboxdrv.sh: Starting VirtualBox services.
+		vboxdrv.sh: Building VirtualBox kernel modules.
+		This system is currently not set up to build kernel modules.
+		Please install the gcc make perl packages from your distribution.
+
+##### 错误2： 安装 gcc make perl
+
+	$ sudo yum install gcc make perl
+	$ sudo rcvboxdrv setup
+	vboxdrv.sh: Stopping VirtualBox services.
+	vboxdrv.sh: Starting VirtualBox services.
+	vboxdrv.sh: Building VirtualBox kernel modules.
+
+##### 出现以下情况，安装成功：
+
+	vboxdrv.sh: Stopping VirtualBox services.
+	vboxdrv.sh: Building VirtualBox kernel modules.
+	vboxdrv.sh: Starting VirtualBox services.
+
+	$ VBoxManage -version
+	6.0.2r128162
+
+#### 1.13 最后安装成后，看看内核
+
+	$ uname -r
+	3.10.0-957.1.3.el7.x86_64
+
+	$ cat /etc/redhat-release 
+	CentOS Linux release 7.6.1810 (Core) 
+
+	$ rpm -qa | grep kernel
+	kernel-3.10.0-957.1.3.el7.x86_64
+	kernel-3.10.0-957.el7.x86_64
+	kernel-headers-3.10.0-957.1.3.el7.x86_64
+	kernel-devel-3.10.0-957.1.3.el7.x86_64
+	kernel-devel-3.10.0-957.el7.x86_64
+	kernel-tools-3.10.0-957.1.3.el7.x86_64
+	kernel-tools-libs-3.10.0-957.1.3.el7.x86_64
+
+
+### 02 镜像加速
+
+鉴于国内网络问题，后续拉取 Docker 镜像十分缓慢，我们可以需要配置加速器来解决
+	
+在/etc/docker/daemon.json文件中添加如下内容:
+	{
+	  "registry-mirrors": ["https://90k64k3g.mirror.aliyuncs.com"]
+	}
+	
+或者使用如下地址:
+	
+	{
+	  "registry-mirrors": ["https://registry.docker-cn.com"]
+	}
+
+启动 Docker 后台服务
+
+	$ sudo systemctl start docker.service
+
+### 03 安装minikube
+
+关闭swap功能
+
+	swapoff  -a
+
+	
+#### 3.1 安装 minikube
+
+	$ curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
+
+#### 3.2 安装kubectl
+
+	$ curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && chmod +x kubectl
+
+#### 3.3 建立软连接
+
+	$ sudo ln -sf /usr/local/bin/minikube /usr/bin/minikube
+	$ sudo ln -sf /usr/local/bin/kubectl  /usr/bin/kubectl
+
+#### 3.4 当启动缺少kernel-devel （之前误删除）
+
+	$ minikube start --vm-driver=virtualbox
+	Starting local Kubernetes v1.13.2 cluster...
+	Starting VM...
+	E0120 00:55:06.042895    7953 start.go:205] Error starting host: Error creating host: Error executing step: Running precreate checks.
+	: We support Virtualbox starting with version 5. Your VirtualBox install is "WARNING: The vboxdrv kernel module is not loaded. Either there is no module available for the current kernel (3.10.0-957.el7.x86_64) or it failed to load. 
+    Please recompile the kernel module and install it by 
+    sudo /sbin/vboxconfig
+    You will not be able to start VMs until this problem is fixed.\n6.0.2r128162". Please upgrade at https://www.virtualbox.org.
+
+重新安装：kernel-devel kernel-devel-3.10.0-957.el7.x86_64
+
+	$ sudo vboxconfig
+	vboxdrv.sh: Stopping VirtualBox services.
+	vboxdrv.sh: Starting VirtualBox services.
+	vboxdrv.sh: Building VirtualBox kernel modules.
+	This system is currently not set up to build kernel modules.
+	Please install the Linux kernel "header" files matching the current kernel
+	for adding new hardware support to the system.
+	The distribution packages containing the headers are probably:
+	    kernel-devel kernel-devel-3.10.0-957.el7.x86_64
+	This system is currently not set up to build kernel modules.
+	Please install the Linux kernel "header" files matching the current kernel
+	for adding new hardware support to the system.
+	The distribution packages containing the headers are probably:
+	    kernel-devel kernel-devel-3.10.0-957.el7.x86_64
+	There were problems setting up VirtualBox.  To re-start the set-up process, run /sbin/vboxconfig as root.
+
+重新检查：vboxconfig
+
+	$ sudo vboxconfig
+		vboxdrv.sh: Stopping VirtualBox services.
+		vboxdrv.sh: Starting VirtualBox services.
+		vboxdrv.sh: Building VirtualBox kernel modules.
+
+#### 3.5 当启动无法下载 kubelet 和 kubeadm
+
+	$ minikube start --vm-driver=virtualbox
+		Starting local Kubernetes v1.13.2 cluster...
+		Starting VM...
+		Getting VM IP address...
+		E0120 01:11:33.497811   31501 start.go:243] Error parsing version semver: Version string empty
+		Moving files into cluster...
+		Downloading kubelet v1.13.2 
+		Downloading kubeadm v1.13.2
+		E0120 01:12:01.084259   31501 start.go:302] Error updating cluster:  
+		downloading binaries: downloading kubeadm: 
+		Error downloading kubeadm v1.13.2: failed to download: 
+		failed to download to temp file: 
+		failed to copy contents: 
+		read tcp 192.168.80.100:34482->216.58.199.112:443: read: connection reset by peer
+
+
+提前下载好，并且传到服务器路径上，增加执行权限，并且创建软连接
+
+	$ sudo ln -sf /usr/local/bin/kubeadm /usr/bin/kubeadm
+	$ sudo ln -sf /usr/local/bin/kubelet /usr/bin/kubelet
+
+
+#### 3.6 删除创建的半拉着VM
+
+	$ minikube delete
+		Deleting local Kubernetes cluster...
+		Machine deleted.
+
+#### 3.7 kubeadm config images list
+
+	$ kubeadm config images list
+	I0120 02:26:14.290748   34583 version.go:94] could not fetch a Kubernetes version from the internet: 
+	unable to get URL "https://dl.k8s.io/release/stable-1.txt": 
+	Get https://dl.k8s.io/release/stable-1.txt: net/http: 
+	request canceled while waiting for connection (Client.Timeout exceeded while awaiting headers)
+	I0120 02:26:14.290858   34583 version.go:95] falling back to the local client version: v1.13.2
+	k8s.gcr.io/kube-apiserver:v1.13.2
+	k8s.gcr.io/kube-controller-manager:v1.13.2
+	k8s.gcr.io/kube-scheduler:v1.13.2
+	k8s.gcr.io/kube-proxy:v1.13.2
+	k8s.gcr.io/pause:3.1
+	k8s.gcr.io/etcd:3.2.24
+	k8s.gcr.io/coredns:1.2.6
+
+
+### 当启动无法获得k8s
+
+	$ minikube start --vm-driver=virtualbox
+		Starting local Kubernetes v1.13.2 cluster...
+		Starting VM...
+		Getting VM IP address...
+		Moving files into cluster...
+		Setting up certs...
+		Connecting to cluster...
+		Setting up kubeconfig...
+		Stopping extra container runtimes...
+		Starting cluster components...
+		E0120 01:23:24.697912   32239 start.go:376] Error starting cluster: kubeadm init: 
+		sudo /usr/bin/kubeadm init 
+		--config /var/lib/kubeadm.yaml 
+		--ignore-preflight-errors=DirAvailable--etc-kubernetes-manifests 
+		--ignore-preflight-errors=DirAvailable--data-minikube 
+		--ignore-preflight-errors=Port-10250 
+		--ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-kube-scheduler.yaml 
+		--ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-kube-apiserver.yaml 
+		--ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-kube-controller-manager.yaml 
+		--ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-etcd.yaml 
+		--ignore-preflight-errors=Swap --ignore-preflight-errors=CRI 
+		
+		[init] Using Kubernetes version: v1.13.2
+		[preflight] Running pre-flight checks
+		        [WARNING Swap]: running with swap on is not supported. Please disable swap
+		[preflight] Pulling images required for setting up a Kubernetes cluster
+		[preflight] This might take a minute or two, depending on the speed of your internet connection
+		[preflight] You can also perform this action in beforehand using 'kubeadm config images pull'
+		error execution phase preflight: [preflight] Some fatal errors occurred:
+		        [ERROR ImagePull]: failed to pull image k8s.gcr.io/kube-apiserver:v1.13.2 ...
+		        [ERROR ImagePull]: failed to pull image k8s.gcr.io/kube-controller-manager:v1.13.2 ...
+		        [ERROR ImagePull]: failed to pull image k8s.gcr.io/kube-scheduler:v1.13.2 ...
+		        [ERROR ImagePull]: failed to pull image k8s.gcr.io/kube-proxy:v1.13.2 ...
+		        [ERROR ImagePull]: failed to pull image k8s.gcr.io/pause:3.1 ...
+		        [ERROR ImagePull]: failed to pull image k8s.gcr.io/etcd:3.2.24 ...
+		        [ERROR ImagePull]: failed to pull image k8s.gcr.io/coredns:1.2.6 ...
+		[preflight] If you know what you are doing, you can make a check non-fatal with `--ignore-preflight-errors=...`
+		: Process exited with status 1
+
+
+### 解决从k8s.gcr.io拉取镜像失败问题
+
+docker.io仓库对google的容器做了镜像，可以通过下列命令下拉取相关镜像：
+
+	docker pull mirrorgooglecontainers/kube-apiserver:v1.13.2
+	docker pull mirrorgooglecontainers/kube-controller-manager:v1.13.2
+	docker pull mirrorgooglecontainers/kube-scheduler:v1.13.2
+	docker pull mirrorgooglecontainers/kube-proxy:v1.13.2
+	docker pull mirrorgooglecontainers/pause:3.1
+	docker pull mirrorgooglecontainers/etcd:3.2.24
+	docker pull coredns/coredns:1.2.6
+	
+版本信息需要根据实际情况进行相应的修改。通过docker tag命令来修改镜像的标签：
+
+	docker tag mirrorgooglecontainers/kube-apiserver:v1.13.2 k8s.gcr.io/kube-apiserver:v1.13.2
+	docker tag mirrorgooglecontainers/kube-controller-manager:v1.13.2 k8s.gcr.io/kube-controller-manager:v1.13.2
+	docker tag mirrorgooglecontainers/kube-scheduler:v1.13.2 k8s.gcr.io/kube-scheduler:v1.13.2
+	docker tag mirrorgooglecontainers/kube-proxy:v1.13.2 k8s.gcr.io/kube-proxy:v1.13.2
+	docker tag mirrorgooglecontainers/pause:3.1 k8s.gcr.io/pause:3.1
+	docker tag mirrorgooglecontainers/etcd:3.2.24 k8s.gcr.io/etcd:3.2.24
+	docker tag coredns/coredns:1.2.6 k8s.gcr.io/coredns:1.2.6
+
+使用docker rmi删除不用镜像：
+
+	docker rmi mirrorgooglecontainers/kube-apiserver:v1.13.2
+	docker rmi mirrorgooglecontainers/kube-controller-manager:v1.13.2
+	docker rmi mirrorgooglecontainers/kube-scheduler:v1.13.2
+	docker rmi mirrorgooglecontainers/kube-proxy:v1.13.2
+	docker rmi mirrorgooglecontainers/pause:3.1
+	docker rmi mirrorgooglecontainers/etcd:3.2.24
+	docker rmi coredns/coredns:1.2.6
+
+通过docker images命令显示，已经有我们需要的镜像文件，可以继续部署工作了：
+
+	$ docker images
+	REPOSITORY                           TAG                 IMAGE ID            CREATED             SIZE
+	k8s.gcr.io/kube-controller-manager   v1.13.2             b9027a78d94c        9 days ago          146MB
+	k8s.gcr.io/kube-proxy                v1.13.2             01cfa56edcfc        9 days ago          80.3MB
+	k8s.gcr.io/kube-apiserver            v1.13.2             177db4b8e93a        9 days ago          181MB
+	k8s.gcr.io/kube-scheduler            v1.13.2             3193be46e0b3        9 days ago          79.6MB
+	k8s.gcr.io/coredns                   1.2.6               f59dcacceff4        2 months ago        40MB
+	k8s.gcr.io/etcd                      3.2.24              3cab8e1b9802        4 months ago        220MB
+	k8s.gcr.io/pause                     3.1                 da86e6ba6ca1        13 months ago       742kB
+
+
+### 解决方式：
+
+	$ kubeadm config print init-defaults > kubeadm.conf
+    $ kubeadm config images pull --config  kubeadm.conf
+	[config/images] Pulled registry.aliyuncs.com/google_containers/kube-apiserver:v1.13.0
+	[config/images] Pulled registry.aliyuncs.com/google_containers/kube-controller-manager:v1.13.0
+	[config/images] Pulled registry.aliyuncs.com/google_containers/kube-scheduler:v1.13.0
+	[config/images] Pulled registry.aliyuncs.com/google_containers/kube-proxy:v1.13.0
+	[config/images] Pulled registry.aliyuncs.com/google_containers/pause:3.1
+	[config/images] Pulled registry.aliyuncs.com/google_containers/etcd:3.2.24
+	[config/images] Pulled registry.aliyuncs.com/google_containers/coredns:1.2.6
+
+	$ docker images
+	REPOSITORY    TAG    IMAGE ID    CREATED    SIZE
+	registry                                                          2                   33fbbf4a24e5        2 weeks ago         24.2MB
+	registry.aliyuncs.com/google_containers/kube-proxy                v1.13.0             8fa56d18961f        6 weeks ago         80.2MB
+	registry.aliyuncs.com/google_containers/kube-apiserver            v1.13.0             f1ff9b7e3d6e        6 weeks ago         181MB
+	registry.aliyuncs.com/google_containers/kube-controller-manager   v1.13.0             d82530ead066        6 weeks ago         146MB
+	registry.aliyuncs.com/google_containers/kube-scheduler            v1.13.0             9508b7d8008d        6 weeks ago         79.6MB
+	registry.aliyuncs.com/google_containers/coredns                   1.2.6               f59dcacceff4        2 months ago        40MB
+	registry.aliyuncs.com/google_containers/etcd                      3.2.24              3cab8e1b9802        4 months ago        220MB
+	registry.aliyuncs.com/google_containers/pause                     3.1                 da86e6ba6ca1        13 months ago       742kB
+	[mac@mac-nat-linux ~]$ 
+
+
+
+### 第二次启动无法获得k8s
+
+	[mac@mac-nat-linux ~]$ minikube start --vm-driver=virtualbox --registry-mirror=https://registry.docker-cn.com
+	Starting local Kubernetes v1.13.2 cluster...
+	Starting VM...
+	E0119 04:31:23.784839   17975 start.go:205] Error starting host: Error starting stopped host: Error setting up host only network on machine start: The host-only adapter we just created is not visible. This is a well known VirtualBox bug. You might want to uninstall it and reinstall at least version 5.0.12 that is is supposed to fix this issue.
+	
+	 Retrying.
+	E0119 04:31:23.785876   17975 start.go:211] Error starting host:  Error starting stopped host: Error setting up host only network on machine start: The host-only adapter we just created is not visible. This is a well known VirtualBox bug. You might want to uninstall it and reinstall at least version 5.0.12 that is is supposed to fix this issue
+
+
+### 第三次启动长时间，在kube-proxy出现错误
+
+	[mac@mac-nat-linux ~]$ minikube start
+	Starting local Kubernetes v1.13.2 cluster...
+	Starting VM...
+	Getting VM IP address...
+	Moving files into cluster...
+	Setting up certs...
+	Connecting to cluster...
+	Setting up kubeconfig...
+	Stopping extra container runtimes...
+	Machine exists, restarting cluster components...
+	E0119 08:26:22.623492   17560 start.go:382] Error restarting cluster:  restarting kube-proxy: waiting for kube-proxy to be up for configmap update: timed out waiting for the condition
+
+
+minikube failed :( exiting with error code 1
+
+### minikube with vm-driver=none
+	
+	$ export MINIKUBE_WANTUPDATENOTIFICATION=false
+	$ export MINIKUBE_WANTREPORTERRORPROMPT=false
+	$ export MINIKUBE_HOME=$HOME
+	$ export CHANGE_MINIKUBE_NONE_USER=true
+	$ mkdir -p $HOME/.kube
+	$ mkdir -p $HOME/.minikube
+	$ touch $HOME/.kube/config
+	$ export KUBECONFIG=$HOME/.kube/config
+	$
+	$ sudo -E minikube start --vm-driver=none
+	[sudo] password for mac: 
+	Starting local Kubernetes v1.13.2 cluster...
+	Starting VM...
+	Getting VM IP address...
+	Moving files into cluster...
+	Setting up certs...
+	Connecting to cluster...
+	Setting up kubeconfig...
+	Stopping extra container runtimes...
+	Starting cluster components...
+	Verifying kubelet health ...
+	Verifying apiserver health ...
+	Kubectl is now configured to use the cluster.
+	===================
+	WARNING: IT IS RECOMMENDED NOT TO RUN THE NONE DRIVER ON PERSONAL WORKSTATIONS
+	        The 'none' driver will run an insecure kubernetes apiserver as root that may leave the host vulnerable to CSRF attacks
+	
+	Loading cached images from config file.
+	Everything looks great. Please enjoy minikube!
+
+
+### KVM2安装步骤
+
+#### install docker-machine-driver-kvm2
+
+curl -Lo docker-machine-driver-kvm2 https://storage.googleapis.com/minikube/releases/latest/docker-machine-driver-kvm2 \
+chmod +x docker-machine-driver-kvm2 \
+&& sudo cp docker-machine-driver-kvm2 /usr/local/bin/ \
+&& rm docker-machine-driver-kvm2
+
+
+
+#### 安装qemu-kvm和libvirt
+
+qemu-kvm用来创建虚拟机硬盘,libvirt用来管理虚拟机
+
+	yum install -y libvirt qemu-kvm    
+
+或者：
+
+	sudo yum install libvirt libvirt-daemon-kvm qemu-kvm
+	sudo usermod -a -G libvirt $(whoami)
+	newgrp libvirt
+
+或者：
+
+	sudo yum install libvirt libvirt-client libvirt--kvm qemu-kvm virt-install
+
+
+
+重启libvirtd：
+
+	[mac@mac-nat-linux ~]$ systemctl start libvirtd
+	[mac@mac-nat-linux ~]$ systemctl enable libvirtd
+	
+查看kvm：
+
+	[mac@mac-nat-linux ~]$ lsmod | grep kvm
+	kvm_intel             183621  0 
+	kvm                   586948  1 kvm_intel
+	irqbypass              13503  1 kvm
+	[mac@mac-nat-linux ~]$ 
+
+#### 安装virt-install
+
+用来创建虚拟机
+
+	yum install -y virt-install    
+
+
+#### 重启检查virbr0网卡
+
+启动libvirtd,并将它设为开机启动,启动后使用ifconfig查看,发现会多出来一块virbr0的网卡,ip默认为192.168.122.1/24,说明libvirtd启动成功,如果默认没有ifconfig命令,使用yum install -y net-tools安装
+
+	sudo systemctl start libvirtd && systemctl enable libvirtd
+	ifconfig
+
+
+
+检查：
+
+	[mac@mac-nat-linux ~]$ sudo virsh net-list --all
+	[sudo] password for mac: 
+	 Name                 State      Autostart     Persistent
+	----------------------------------------------------------
+	 default              active     yes           yes
+	[mac@mac-nat-linux ~]$ 
+	[mac@mac-nat-linux ~]$ sudo virsh net-list --all
+	[sudo] password for mac: 
+	 Name                 State      Autostart     Persistent
+	----------------------------------------------------------
+	 default              active     yes           yes
+	 minikube-net         active     yes           yes
+	[mac@mac-nat-linux ~]$ 
+
+
+启动无法认识kvm
+
+	[mac@mac-nat-linux ~]$ minikube start --vm-driver=kvm2
+	Starting local Kubernetes v1.13.2 cluster...
+	Starting VM...
+	E0119 01:34:21.727011    8010 start.go:205] Error starting host: Error creating host: Error creating machine: Error in driver during machine creation: Error creating VM: virError(Code=1, Domain=10, Message='internal error: qemu unexpectedly closed the monitor: 2019-01-19T06:34:19.435738Z qemu-kvm: unrecognized feature kvm').
+	
+	 Retrying.
+	E0119 01:34:21.731917    8010 start.go:211] Error starting host:  Error creating host: Error creating machine: Error in driver during machine creation: Error creating VM: virError(Code=1, Domain=10, Message='internal error: qemu unexpectedly closed the monitor: 2019-01-19T06:34:19.435738Z qemu-kvm: unrecognized feature kvm')
+	================================================================================
+	An error has occurred. Would you like to opt in to sending anonymized crash
+	information to minikube to help prevent future errors?
+	
+	To disable this prompt, run: 'minikube config set WantReportErrorPrompt false'
+	================================================================================
+	Please enter your response [Y/n]: Prompt timed out.
+	Bummer, perhaps next time!
+	
+	
+	minikube failed :( exiting with error code 1
+	[mac@mac-nat-linux ~]$ 
+
+
+### Linux Continuous Integration without VM Support
+
+
+	export MINIKUBE_WANTUPDATENOTIFICATION=false
+	export MINIKUBE_WANTREPORTERRORPROMPT=false
+	export MINIKUBE_HOME=$HOME
+	export CHANGE_MINIKUBE_NONE_USER=true
+	mkdir -p $HOME/.kube
+	mkdir -p $HOME/.minikube
+	touch $HOME/.kube/config
+
+
