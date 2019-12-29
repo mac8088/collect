@@ -1,0 +1,289 @@
+
+[mac@master ~]$ kubectl get nodes
+NAME         STATUS     ROLES    AGE   VERSION
+master.k8s   Ready      master   26d   v1.15.0
+node1.k8s    Ready      <none>   26d   v1.15.0
+node2.k8s    Ready      <none>   26d   v1.15.0
+node3.k8s    NotReady   <none>   20d   v1.15.0
+[mac@master ~]$ 
+
+[mac@master ~]$ kubectl get pods
+NAME     READY   STATUS        RESTARTS   AGE
+mypod1   1/1     Terminating   0          122m
+[mac@master ~]$ 
+
+[mac@master ~]$ kubbectl get pv
+-bash: kubbectl: command not found
+[mac@master ~]$ 
+
+[mac@master ~]$ kubectl get pv
+NAME    CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM            STORAGECLASS   REASON   AGE
+mypv1   1Gi        RWO            Recycle          Bound    default/mypvc1   nfs                     171m
+[mac@master ~]$ 
+
+
+[mac@master ~]$ kubectl get pvc
+NAME     STATUS        VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+mypvc1   Terminating   mypv1    1Gi        RWO            nfs            164m
+[mac@master ~]$ 
+
+
+[mac@master ~]$ mount -t nfs -o rw 192.168.0.112:/nfsshare /nfsdata
+mount: only root can use "--options" option
+[mac@master ~]$ 
+
+[mac@master ~]$ sudo mount -t nfs -o rw 192.168.0.112:/nfsshare /nfsdata
+[sudo] password for mac: 
+[mac@master ~]$ 
+
+[mac@master ~]$ ls /nfsdata/
+pv1
+[mac@master ~]$ 
+
+[mac@master ~]$ kubectl get nodes
+NAME         STATUS   ROLES    AGE   VERSION
+master.k8s   Ready    master   26d   v1.15.0
+node1.k8s    Ready    <none>   26d   v1.15.0
+node2.k8s    Ready    <none>   26d   v1.15.0
+node3.k8s    Ready    <none>   20d   v1.15.0
+[mac@master ~]$ 
+
+[mac@master ~]$ kubectl get pods
+No resources found.
+[mac@master ~]$ 
+
+
+[mac@master ~]$ kubectl get pv
+NAME    CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+mypv1   1Gi        RWO            Recycle          Available           nfs                     176m
+[mac@master ~]$ 
+
+[mac@master ~]$ kubectl get pvc
+No resources found.
+[mac@master ~]$ 
+
+[mac@master ~]$ kubectl get pv,pvc
+NAME                     CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+persistentvolume/mypv1   1Gi        RWO            Recycle          Available           nfs                     177m
+
+
+[mac@master ~]$ 
+[mac@master ~]$ kubectl get pv
+NAME    CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+mypv1   1Gi        RWO            Recycle          Available           nfs                     177m
+[mac@master ~]$ 
+
+[mac@master ~]$ kubectl get pvc
+No resources found.
+[mac@master ~]$ 
+
+[mac@master ~]$ kubectl get pv,pvc
+NAME                     CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+persistentvolume/mypv1   1Gi        RWO            Recycle          Available           nfs                     179m
+
+[mac@master ~]$ cd demo_k8s/
+[mac@master demo_k8s]$ ls
+bootcamp-v1.yml  httpd-svc-clusterip.yml  httpd.v2.yml  myjob_cron.yml             myjob_paralelism_completions.yml  nfs-pv1.yml      nginx-ssd.yml
+bootcamp.yml     httpd-svc.yml            httpd.v3.yml  myjob_invalid_command.yml  myjob_paralelism.yml              nfs-pvc1.yml     nginx.yml
+emptyDir.yml     httpd.v1.yml             httpd.yml     myjob_onfailure.yml        nfs-pod.yml                       nginx-label.xml
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ vi nfs-pv1.yml 
+[mac@master demo_k8s]$ cat nfs-pv1.yml 
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mypv1
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nfs
+  nfs:
+    path: /nfsshare/pv1
+    server: 192.168.0.112
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl apply -f nfs-pv1.yml 
+persistentvolume/mypv1 configured
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pv
+NAME    CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+mypv1   1Gi        RWO            Retain           Available           nfs                     3h3m
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl apply -f nfs-pvc1.yml 
+persistentvolumeclaim/mypvc1 created
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pv,pvc
+NAME                     CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM            STORAGECLASS   REASON   AGE
+persistentvolume/mypv1   1Gi        RWO            Retain           Bound    default/mypvc1   nfs                     3h4m
+NAME                           STATUS   VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+persistentvolumeclaim/mypvc1   Bound    mypv1    1Gi        RWO            nfs            8s
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ 
+[mac@master demo_k8s]$ kubectl get pvc
+NAME     STATUS   VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+mypvc1   Bound    mypv1    1Gi        RWO            nfs            14s
+[mac@master demo_k8s]$ 
+
+
+[mac@master demo_k8s]$ kubectl get pods
+No resources found.
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl apply -f nfs-pod.yml 
+pod/mypod1 created
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pods
+NAME     READY   STATUS              RESTARTS   AGE
+mypod1   0/1     ContainerCreating   0          6s
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pods -o wide
+NAME     READY   STATUS    RESTARTS   AGE   IP          NODE        NOMINATED NODE   READINESS GATES
+mypod1   1/1     Running   0          15s   10.34.0.1   node3.k8s   <none>           <none>
+[mac@master demo_k8s]$ 
+
+
+[mac@master demo_k8s]$ kubectl exec mypod1 touch /mydata/hello2
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ ls /nfsdata/pv1/
+hello2
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pvc
+NAME     STATUS   VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+mypvc1   Bound    mypv1    1Gi        RWO            nfs            3m45s
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pv
+NAME    CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM            STORAGECLASS   REASON   AGE
+mypv1   1Gi        RWO            Retain           Bound    default/mypvc1   nfs                     3h8m
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pods
+NAME     READY   STATUS    RESTARTS   AGE
+mypod1   1/1     Running   0          2m41s
+[mac@master demo_k8s]$ 
+、
+[mac@master demo_k8s]$ kubectl delete pvc mypvc1
+persistentvolumeclaim "mypvc1" deleted
+
+
+[mac@master demo_k8s]$ kubectl get pods
+NAME     READY   STATUS    RESTARTS   AGE
+mypod1   1/1     Running   0          8m43s
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ 
+[mac@master demo_k8s]$ kubectl get pv
+NAME    CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM            STORAGECLASS   REASON   AGE
+mypv1   1Gi        RWO            Retain           Bound    default/mypvc1   nfs                     3h14m
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pvc
+NAME     STATUS        VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+mypvc1   Terminating   mypv1    1Gi        RWO            nfs            10m
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl delete pod mypod1
+pod "mypod1" deleted
+
+[mac@master demo_k8s]$ kubectl get pvc
+No resources found.
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pv
+NAME    CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS     CLAIM            STORAGECLASS   REASON   AGE
+mypv1   1Gi        RWO            Retain           Released   default/mypvc1   nfs                     3h19m
+[mac@master demo_k8s]$ 
+
+
+[mac@master demo_k8s]$ kubectl get pods
+No resources found.
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pvc
+No resources found.
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pv
+NAME    CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS     CLAIM            STORAGECLASS   REASON   AGE
+mypv1   1Gi        RWO            Retain           Released   default/mypvc1   nfs                     3h19m
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl delete pv mypv1
+persistentvolume "mypv1" deleted
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pv,pvc
+No resources found.
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ cat nfs-pv1-retain.yml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mypv1
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nfs
+  nfs:
+    path: /nfsshare/pv1
+    server: 192.168.0.112
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl apply -f nfs-pv1-retain.yml
+persistentvolume/mypv1 created
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pv
+NAME    CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+mypv1   1Gi        RWO            Retain           Available           nfs                     6s
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pvc
+No resources found.
+[mac@master demo_k8s]$ 
+[mac@master demo_k8s]$ kubectl get pv
+NAME    CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+mypv1   1Gi        RWO            Retain           Available           nfs                     82s
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pvc
+No resources found.
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pods
+No resources found.
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl delete pv mypv1
+persistentvolume "mypv1" deleted
+[mac@master demo_k8s]$ 
+
+[mac@master demo_k8s]$ kubectl get pv,pvc
+No resources found.
+[mac@master demo_k8s]$ kubectl get pv,pvc,pod
+No resources found.
+
+[mac@master demo_k8s]$ kubectl get service
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   19d
+[mac@master demo_k8s]$ 
+
+
+
+

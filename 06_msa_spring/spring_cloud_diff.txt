@@ -1,0 +1,222 @@
+﻿
+1. add import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+@EnableDiscoveryClient
+
+2. org.springframework.cloud.commons.util.InetUtils: TRACE   
+# 开启这边的日志，可以打印出Spring查找网卡的过程
+
+#忽略指定名称的网卡
+spring:
+  cloud:
+    inetutils:
+      ignored-interfaces:
+        - docker0
+        - veth.*
+		
+#正则指定使用的地址
+spring:
+  cloud:
+    inetutils:
+      preferredNetworks:
+        - 192.168
+        - 10.0
+		
+#使用站点本地地址
+spring:
+  cloud:
+    inetutils:
+      useOnlySiteLocalInterfaces: true
+	  
+#Eurka HA and AUTH
+application-ha.yml.bak application-autherntication.yml.bak
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://peer1:8761/eureka/,http://peer2:8762/eureka/    
+	  #defaultZone: http://localhost:8761/eureka/
+	  #defaultZone: http://user:password123@localhost:8761/eureka/
+	  
+	  
+#-手动指定IP, 删掉inetutils部分
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    ip-address: 127.0.0.1
+	
+
+# 自定义的元数据，key/value都可以随便写。
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    metadata-map:
+      my-metadata: 我自定义的元数据       
+	  
+	  
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+	  
+#创建WebSecurityConfig
+@Configuration
+@EnableWebSecurity
+@EnableGlobalMethodSecurity(prePostEnabled = true)
+public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
+// 所有的请求，都需要经过HTTP basic认证
+// 明文编码器。这是一个不做任何操作的密码编码器，是Spring提供给我们做明文测试的。
+//CustomUserDetailsService模拟两个账户
+}
+
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+@RestController
+public class UserController {
+    Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    if (principal instanceof UserDetails) {
+	// 打印当前登录用户的信息
+	}
+
+
+#microservice-consumer-movie-ribbon 增加ribbon for LoadBalanced
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
+@EnableDiscoveryClient
+@SpringBootApplication
+public class ConsumerMovieApplication {
+  @Bean
+  @LoadBalanced
+  public RestTemplate restTemplate() {
+    return new RestTemplate();
+  }
+
+  ...
+}
+
+import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.cloud.client.loadbalancer.LoadBalancerClient;
+@RestController
+public class MovieController {
+
+  @Autowired
+  private LoadBalancerClient loadBalancerClient;
+  
+  @GetMapping("/user/{id}")
+  public User findById(@PathVariable Long id) {
+    return this.restTemplate.getForObject("http://microservice-provider-user/" + id, User.class);
+  }
+  
+  @GetMapping("/log-user-instance")
+  public void logUserInstance() {
+    ServiceInstance serviceInstance = this.loadBalancerClient.choose("microservice-provider-user");
+    // 打印当前选择的是哪个节点
+    MovieController.LOGGER.info("{}:{}:{}", serviceInstance.getServiceId(), serviceInstance.getHost(), serviceInstance.getPort());
+  }
+}
+
+#microservice-consumer-movie-ribbon-customizing 增加customizing ribbon for LoadBalanced
+
+/**
+ * 该类为Ribbon的配置类
+ * 注意：该类不应该在主应用程序上下文的@ComponentScan 中。
+ * @author 周立
+ */
+@Configuration
+public class RibbonConfiguration {
+  @Bean
+  public IRule ribbonRule() {
+    // 负载均衡规则，改为随机
+    return new RandomRule();
+  }
+}
+
+/**
+ * 使用RibbonClient，为特定name的Ribbon Client自定义配置.
+ * 使用@RibbonClient的configuration属性，指定Ribbon的配置类.
+ * 可参考的示例：
+ * http://spring.io/guides/gs/client-side-load-balancing/
+ * @author 周立
+ */
+@Configuration
+@RibbonClient(name = "microservice-provider-user", configuration = RibbonConfiguration.class)
+public class TestConfiguration {
+}
+
+
+或者： microservice-consumer-movie-ribbon-customizing-properties
+microservice-provider-user:
+  ribbon:
+    NFLoadBalancerRuleClassName: com.netflix.loadbalancer.RandomRule
+	
+#为消费者定义：microservice-consumer-movie-feign
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-feign</artifactId>
+</dependency>
+
+
+新建UserFeignClient
+import org.springframework.cloud.netflix.feign.FeignClient;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+
+import com.itmuch.cloud.study.user.entity.User;
+
+@FeignClient(name = "microservice-provider-user")
+public interface UserFeignClient {
+  @RequestMapping(value = "/{id}", method = RequestMethod.GET)
+  public User findById(@PathVariable("id") Long id);
+}
+
+可以删掉：org.springframework.web.client.RestTemplate
+但是要增加：import org.springframework.cloud.netflix.feign.EnableFeignClients;
+@EnableDiscoveryClient
+@SpringBootApplication
+@EnableFeignClients
+public class ConsumerMovieApplication {
+}
+
+然后，自动织入
+import com.itmuch.cloud.study.user.entity.User;
+import com.itmuch.cloud.study.user.feign.UserFeignClient;
+
+@RestController
+public class MovieController {
+  @Autowired
+  private UserFeignClient userFeignClient;
+
+  @GetMapping("/user/{id}")
+  public User findById(@PathVariable Long id) {
+    return this.userFeignClient.findById(id);
+  }
+}
+
+为消费者整合Feign，同Feign去调用用户微服务。
+好处，不但实现了声明式REST API， 同时实现了客户端负载均衡。
+
+
+
+
+
+
+Hystrix是一个实现了超时机制和断路器的模式的工具类库
+
+import org.springframework.cloud.client.circuitbreaker.EnableCircuitBreaker;
+@EnableDiscoveryClient
+@SpringBootApplication
+@EnableCircuitBreaker
+public class ConsumerMovieApplication {
+
+
+C:\Users\A450588>curl http://localhost:8080/encrypt -d mysecret
+45a6da11b45d149cca5d5492c6f041df33eeff0c73cd33420a13badd4733f92d
+C:\Users\A450588>curl http://localhost:8080/decrypt -d 45a6da11b45d149cca5d5492c6f041df33eeff0c73cd33420a13badd4733f92d
+mysecret
+C:\Users\A450588>
+
