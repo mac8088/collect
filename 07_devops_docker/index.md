@@ -1404,4 +1404,22 @@ Docker0的网络信息：
 
 ### Docker相关项目
 
+## docker 高级练习
+
+### 准备三台机器
+
+复制虚机，更改MAC地址，进入后获得IP，并且更改主机名
+
+
+[root@mac-linux mac]# hostnamectl --static set-hostname node1.docker
+[root@mac-linux mac]# 
+
+
+[root@mac-linux mac]# hostnamectl --static set-hostname node2.docker
+[root@mac-linux mac]# 
+
+
+[root@mac-linux mac]# hostnamectl --static set-hostname node3.docker
+[root@mac-linux mac]# 
+
 
