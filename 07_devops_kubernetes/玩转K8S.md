@@ -1099,9 +1099,9 @@ kubeadm默认会从k8s.gcr.io上下载kube的images，但是在国内环境是�
 
 	To start using your cluster, you need to run the following as a regular user:
 	
-	  mkdir -p $HOME/.kube
-	  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-	  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+	  mkdir -p $HOME/.kube/config
+	  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config/admin.conf
+	  sudo chown $(id -u):$(id -g) $HOME/.kube/config/admin.conf
 
 
 你可以使用下面的操作，在本地机器上使用集群：
